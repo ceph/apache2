@@ -1269,7 +1269,11 @@ AP_CORE_DECLARE_NONSTD(apr_status_t) ap_http_header_filter(ap_filter_t *f,
     if (r->header_only
         && (clheader = apr_table_get(r->headers_out, "Content-Length"))
         && !strcmp(clheader, "0")) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r,
+                      "not unsetting Content-Length on HEAD response (rgw changes)\n");
+#if 0
         apr_table_unset(r->headers_out, "Content-Length");
+#endif
     }
 
     b2 = apr_brigade_create(r->pool, c->bucket_alloc);

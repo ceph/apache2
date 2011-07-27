@@ -1,0 +1,11 @@
+#!/bin/sh -e
+
+## DP: copy suexec to suexec-custom
+
+WORKDIR=${2:-.}
+
+if [ "$1" = -patch ]; then
+	cp $WORKDIR/support/suexec.c $WORKDIR/support/suexec-custom.c
+elif [ "$1" = -unpatch ]; then
+	rm $WORKDIR/support/suexec-custom.c
+fi

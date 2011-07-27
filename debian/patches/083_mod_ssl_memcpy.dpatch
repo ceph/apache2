@@ -1,0 +1,29 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 082_mod_ssl_memcpy.dpatch by Stefan Fritsch <sf@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Use memmove for overlapping buffers
+## DP: http://issues.apache.org/bugzilla/show_bug.cgi?id=45444
+## DP: http://svn.apache.org/viewvc?rev=683280&view=rev
+## DP: LP: https://bugs.launchpad.net/bugs/609290
+
+@DPATCH@
+diff -urNad trunk~/modules/ssl/ssl_engine_io.c trunk/modules/ssl/ssl_engine_io.c
+--- trunk~/modules/ssl/ssl_engine_io.c	2010-03-01 22:27:17.000000000 +0100
++++ trunk/modules/ssl/ssl_engine_io.c	2010-07-24 21:26:55.763976033 +0200
+@@ -352,13 +352,13 @@
+ 
+     if (buffer->length > inl) {
+         /* we have have enough to fill the caller's buffer */
+-        memcpy(in, buffer->value, inl);
++        memmove(in, buffer->value, inl);
+         buffer->value += inl;
+         buffer->length -= inl;
+     }
+     else {
+         /* swallow remainder of the buffer */
+-        memcpy(in, buffer->value, buffer->length);
++        memmove(in, buffer->value, buffer->length);
+         inl = buffer->length;
+         buffer->value = NULL;
+         buffer->length = 0;

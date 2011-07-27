@@ -1,0 +1,28 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 047_fix_usage_message.dpatch by Stefan Fritsch <sf@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Add -X to the help message
+
+@DPATCH@
+diff -urNad apache2-2.2.4~/server/main.c apache2-2.2.4/server/main.c
+--- apache2-2.2.4~/server/main.c	2006-09-15 15:19:25.000000000 +0200
++++ apache2-2.2.4/server/main.c	2007-06-25 23:19:58.000000000 +0200
+@@ -336,7 +336,7 @@
+ #endif /* AP_MPM_WANT_SET_GRACEFUL_SHUTDOWN */
+ #endif
+     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
+-                 "       %s [-v] [-V] [-h] [-l] [-L] [-t] [-S]", pad);
++                 "       %s [-v] [-V] [-h] [-l] [-L] [-t] [-S] [-X]", pad);
+     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
+                  "Options:");
+ 
+@@ -415,6 +415,8 @@
+                  "  -M                 : a synonym for -t -D DUMP_MODULES");
+     ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
+                  "  -t                 : run syntax check for config files");
++    ap_log_error(APLOG_MARK, APLOG_STARTUP, 0, NULL,
++                 "  -X                 : debug mode (only one worker, do not detach)");
+ 
+     destroy_and_exit_process(process, 1);
+ }

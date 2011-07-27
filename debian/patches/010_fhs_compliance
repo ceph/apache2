@@ -1,0 +1,77 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 010_more_fhs_compliance by Adam Conrad <adconrad@0c3.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Fix up FHS file locations for apache2 droppings.
+
+@DPATCH@
+diff -urNad trunk~/config.layout trunk/config.layout
+--- trunk~/config.layout	2010-02-07 01:01:14.000000000 +0100
++++ trunk/config.layout	2010-02-07 01:01:42.858033215 +0100
+@@ -314,11 +314,11 @@
+     manualdir:     ${htdocsdir}/manual
+     cgidir:        ${prefix}/usr/lib/cgi-bin
+     includedir:    ${exec_prefix}/include/apache2
+-    localstatedir: ${prefix}/var/run
+-    runtimedir:    ${prefix}/var/run
++    localstatedir: ${prefix}/var/lock/apache2
++    runtimedir:    ${prefix}/var/run/apache2
+     logfiledir:    ${prefix}/var/log/apache2
+     proxycachedir: ${prefix}/var/cache/apache2/proxy
+     infodir:       ${exec_prefix}/share/info
+-    installbuilddir: ${prefix}/etc/apache2/build
++    installbuilddir: ${prefix}/usr/share/apache2/build
+     errordir:      ${datadir}/error
+ </Layout>
+diff -urNad trunk~/configure trunk/configure
+--- trunk~/configure	2010-02-07 01:01:14.000000000 +0100
++++ trunk/configure	2010-02-07 01:01:55.166032804 +0100
+@@ -18881,17 +18881,17 @@
+ 
+ 
+ cat >>confdefs.h <<_ACEOF
+-#define HTTPD_ROOT "${ap_prefix}"
++#define HTTPD_ROOT "/etc/apache2"
+ _ACEOF
+ 
+ 
+ cat >>confdefs.h <<_ACEOF
+-#define SERVER_CONFIG_FILE "${rel_sysconfdir}/${progname}.conf"
++#define SERVER_CONFIG_FILE "${progname}.conf"
+ _ACEOF
+ 
+ 
+ cat >>confdefs.h <<_ACEOF
+-#define AP_TYPES_CONFIG_FILE "${rel_sysconfdir}/mime.types"
++#define AP_TYPES_CONFIG_FILE "mime.types"
+ _ACEOF
+ 
+ 
+diff -urNad trunk~/configure.in trunk/configure.in
+--- trunk~/configure.in	2010-02-07 01:01:14.000000000 +0100
++++ trunk/configure.in	2010-02-07 01:01:42.866058396 +0100
+@@ -649,11 +649,11 @@
+ echo $MODLIST | $AWK -f $srcdir/build/build-modules-c.awk > modules.c
+ 
+ APR_EXPAND_VAR(ap_prefix, $prefix)
+-AC_DEFINE_UNQUOTED(HTTPD_ROOT, "${ap_prefix}",
++AC_DEFINE_UNQUOTED(HTTPD_ROOT, "/etc/apache2",
+ 	[Root directory of the Apache install area])
+-AC_DEFINE_UNQUOTED(SERVER_CONFIG_FILE, "${rel_sysconfdir}/${progname}.conf",
++AC_DEFINE_UNQUOTED(SERVER_CONFIG_FILE, "${progname}.conf",
+ 	[Location of the config file, relative to the Apache root directory])
+-AC_DEFINE_UNQUOTED(AP_TYPES_CONFIG_FILE, "${rel_sysconfdir}/mime.types",
++AC_DEFINE_UNQUOTED(AP_TYPES_CONFIG_FILE, "mime.types",
+ 	[Location of the MIME types config file, relative to the Apache root directory])
+ AC_DEFINE_UNQUOTED(APACHE_MPM_DIR, "$MPM_DIR",
+ 	[Location of the source for the current MPM])
+diff -urNad trunk~/include/ap_config_layout.h.in trunk/include/ap_config_layout.h.in
+--- trunk~/include/ap_config_layout.h.in	2010-02-07 01:01:14.000000000 +0100
++++ trunk/include/ap_config_layout.h.in	2010-02-07 01:01:42.866058396 +0100
+@@ -60,5 +60,6 @@
+ #define DEFAULT_REL_LOGFILEDIR "@rel_logfiledir@"
+ #define DEFAULT_EXP_PROXYCACHEDIR "@exp_proxycachedir@"
+ #define DEFAULT_REL_PROXYCACHEDIR "@rel_proxycachedir@"
++#define DEFAULT_PIDLOG "/var/run/apache2.pid"
+ 
+ #endif /* AP_CONFIG_LAYOUT_H */

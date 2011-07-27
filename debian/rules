@@ -1,0 +1,338 @@
+#! /usr/bin/make -f 
+
+# Code for httpd 2.1, based on apache2 and others.
+# Copyright (C) Canonical Ltd, 2005
+
+export DEB_BUILD_OPTIONS
+export DH_OPTIONS
+
+SHELL := sh -e
+
+#enable dpatch
+include /usr/share/dpatch/dpatch.make
+
+# These are used for cross-compiling and for saving the configure script
+# # from having to guess our platform (since we know it already)
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+LSB_RELEASE := $(shell lsb_release -i -s)
+
+CONFFLAGS += ac_cv_prog_AWK=mawk ac_cv_prog_LYNX_PATH=www-browser
+
+AP2_COMMON_CONFARGS = --enable-layout=Debian --enable-so \
+                      --with-program-name=apache2  \
+		      --with-ldap=yes --with-ldap-include=/usr/include \
+		      --with-ldap-lib=/usr/lib \
+		      --with-suexec-caller=www-data \
+		      --with-suexec-bin=/usr/lib/apache2/suexec \
+	  	      --with-suexec-docroot=/var/www \
+		      --with-suexec-userdir=public_html \
+		      --with-suexec-logfile=/var/log/apache2/suexec.log \
+		      --with-suexec-uidmin=100 \
+		      --enable-suexec=shared \
+		      --enable-log-config=static --enable-logio=static \
+		      --with-apr=/usr/bin/apr-1-config \
+		      --with-apr-util=/usr/bin/apu-1-config \
+		      --with-pcre=yes \
+		      --enable-pie
+
+AP2_MODS_CONFARGS =   --enable-authn-alias=shared --enable-authnz-ldap=shared  \
+		      --enable-disk-cache=shared --enable-cache=shared \
+		      --enable-mem-cache=shared --enable-file-cache=shared \
+		      --enable-cern-meta=shared --enable-dumpio=shared --enable-ext-filter=shared \
+		      --enable-charset-lite=shared --enable-cgi=shared \
+		      --enable-dav-lock=shared --enable-log-forensic=shared \
+		      --enable-ldap=shared --enable-proxy=shared \
+		      --enable-proxy-connect=shared --enable-proxy-ftp=shared \
+		      --enable-proxy-http=shared --enable-proxy-ajp=shared \
+		      --enable-proxy-scgi=shared \
+		      --enable-proxy-balancer=shared --enable-ssl=shared \
+		      --enable-authn-dbm=shared --enable-authn-anon=shared \
+		      --enable-authn-dbd=shared --enable-authn-file=shared \
+		      --enable-authn-default=shared --enable-authz-host=shared \
+		      --enable-authz-groupfile=shared --enable-authz-user=shared \
+		      --enable-authz-dbm=shared --enable-authz-owner=shared \
+		      --enable-authnz-ldap=shared --enable-authz-default=shared \
+		      --enable-auth-basic=shared --enable-auth-digest=shared \
+		      --enable-dbd=shared --enable-deflate=shared \
+		      --enable-include=shared --enable-filter=shared \
+		      --enable-env=shared --enable-mime-magic=shared \
+		      --enable-expires=shared --enable-headers=shared \
+		      --enable-ident=shared --enable-usertrack=shared \
+		      --enable-unique-id=shared --enable-setenvif=shared \
+		      --enable-version=shared --enable-status=shared \
+		      --enable-autoindex=shared --enable-asis=shared \
+		      --enable-info=shared --enable-cgid=shared \
+		      --enable-dav=shared --enable-dav-fs=shared \
+		      --enable-vhost-alias=shared --enable-negotiation=shared \
+		      --enable-dir=shared --enable-imagemap=shared \
+		      --enable-actions=shared --enable-speling=shared \
+		      --enable-userdir=shared --enable-alias=shared \
+		      --enable-rewrite=shared --enable-mime=shared \
+		      --enable-substitute=shared  --enable-reqtimeout=shared
+
+AP2_CFLAGS = $(CFLAGS) -g -pipe -I/usr/include/xmltok -I/usr/include/openssl -Wall -Wformat -Wformat-security -D_FORTIFY_SOURCE=2 -fstack-protector
+AP2_LDFLAGS = -Wl,--as-needed -Wl,-z,relro
+
+#support noopt building
+ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
+  AP2_CFLAGS += -O0
+else
+  AP2_CFLAGS += -O2
+endif
+
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+DEB_BUILD_STRIP = yes
+endif
+
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+  MAKEFLAGS += -j$(NUMJOBS)
+endif
+
+BUILD=debian/build-tree
+REALCURDIR=$(CURDIR)
+INSTALL=/usr/bin/install
+
+clean: unpatch
+	dh_testdir
+	rm -rf $(BUILD) mpm-worker mpm-prefork mpm-event mpm-itk install
+	rm -rf debian/tmp-worker debian/tmp-prefork
+	dh_clean
+
+build: patch-stamp build-stamp 
+build-stamp: patch-stamp mpm-worker mpm-prefork mpm-event mpm-itk
+	for mpm in prefork event itk ; do \
+		if ! diff -u $(BUILD)/$$mpm/mods.list $(BUILD)/worker/mods.list ; then \
+			echo Different modules built into httpd binaries, will not proceed ;\
+			exit 1 ;\
+		fi \
+	done
+	touch $@
+
+
+mpm-worker mpm-prefork mpm-event mpm-itk: mpm-%: patch-stamp mpm-%.scripts-stamp
+	dh_testdir
+	mkdir -p $(BUILD)/$*
+	# we don't want modifications done by itk outside of server/mpm/experimental/itk
+	# to appear in the other mpms. Therefore we copy the whole source tree.
+	set -ex ;										\
+	if [ $* = itk ] ; then 									\
+		cp -a `find . -maxdepth 1 -mindepth 1 -not -name debian` $(BUILD)/$* ;		\
+		cd $(BUILD)/$* ;								\
+		mkdir server/mpm/experimental/itk/ ;						\
+		cp server/mpm/prefork/* server/mpm/experimental/itk/ ;				\
+		mv server/mpm/experimental/itk/prefork.c server/mpm/experimental/itk/itk.c ;	\
+												\
+		for PATCH in `tail -n +2 ../../mpm-itk/patches/series`; do			\
+			echo Applying $$PATCH ... ;						\
+			patch -p1 < ../../mpm-itk/patches/$$PATCH ;				\
+			echo ;									\
+		done ;										\
+												\
+		autoheader ;									\
+		autoconf ;									\
+		CONFIGURE=./configure ;								\
+	else 											\
+		cd $(BUILD)/$* ;								\
+		CONFIGURE="$(REALCURDIR)/configure --srcdir=$(REALCURDIR)" ;			\
+	fi ;											\
+	if [ $* = worker ] ; then 								\
+		ENABLE_MODULES="$(AP2_MODS_CONFARGS)" ;						\
+	else 											\
+		ENABLE_MODULES=--enable-modules=none ;						\
+	fi ;											\
+	CFLAGS="$(AP2_CFLAGS)" LDFLAGS="$(AP2_LDFLAGS)" $(CONFFLAGS) $$CONFIGURE 		\
+		$(AP2_COMMON_CONFARGS) $$ENABLE_MODULES --with-mpm=$*  ;			\
+	$(MAKE) ;										\
+	./apache2 -l |grep -v $* > mods.list
+	touch $@
+
+mpm-%.scripts-stamp: debian/mpms.postinst debian/mpms.preinst debian/mpms.prerm debian/mpms.lintian-overrides debian/mpms.dirs debian/mpms.links
+	for f in postinst preinst prerm links dirs ; do \
+		perl -p -e "s/MPMXXX/$*/g" < debian/mpms.$$f > debian/apache2-mpm-$*.$$f ;\
+	done
+	perl -p -e "s/^/apache2-mpm-$*: /" < debian/mpms.lintian-overrides > debian/apache2-mpm-$*.lintian-overrides
+	touch $@ 
+ 
+install-worker: mpm-worker
+	dh_testdir
+	dh_testroot
+	# force one process since mkdir.sh used by 'make install' is not reliable otherwise
+	cd $(BUILD)/worker ;\
+	$(MAKE) DESTDIR=$(REALCURDIR)/debian/tmp -j 1 install
+	for m in logresolve ab; do d=$(REALCURDIR)/debian/tmp/usr/share/man/ ;\
+	    perl -p -e 's/^([.]TH.*?) 8 (.*)/$$1 1 $$2/' < $$d/man8/$$m.8 > $$d/man1/$$m.1 ;\
+	done
+	ln -sf tmp debian/tmp-worker
+
+install-prefork: mpm-prefork
+	dh_testdir
+	dh_testroot
+	# force one process since mkdir.sh used by 'make install' is not reliable otherwise
+	cd $(BUILD)/prefork ;\
+	$(MAKE) DESTDIR=$(REALCURDIR)/debian/tmp-prefork -j 1 install
+
+install-dev: install-worker install-prefork
+	dh_testdir
+	dh_testroot
+	dh_installdirs
+	for i in worker prefork; do \
+		if [ "$$i" = "prefork" ]; then \
+			TARGET=prefork ;\
+		else \
+			TARGET=threaded ;\
+		fi ;\
+		cp debian/tmp-$$i/usr/include/apache2/* debian/apache2-$$TARGET-dev/usr/include/apache2/ ;\
+		cp debian/tmp-$$i/usr/share/apache2/build/* debian/apache2-$$TARGET-dev/usr/share/apache2/build/ ;\
+		cp $(BUILD)/$$i/support/apxs debian/apache2-$$TARGET-dev/usr/bin/apxs2 ;\
+		perl -p -e s/^P=apache2/P=apache2-$${TARGET}-dev/ < debian/apache2.postinst > debian/apache2-$${TARGET}-dev.postinst ;\
+	done
+# Clean up config_vars.mk
+	set -x ; for i in threaded prefork; do \
+		( cd debian/apache2-$$i-dev/usr/share/apache2/build/ ; \
+		grep -v -E '(^|_)(CPP|C)FLAGS' config_vars.mk > tmp_config_vars.mk ; \
+		printf "CPPFLAGS = %s\n" "`grep -E '(^|_)(CPPFLAGS|INCLUDES)' config_vars.mk | cut -d= -f 2- | tr ' ' '\n' | grep -E '^-([DI]|pthread)' | sort | uniq | tr '\n' ' '`" >> tmp_config_vars.mk ; \
+		printf "CFLAGS = %s\n" "`grep -E '(^|_)(CPPFLAGS|CFLAGS|INCLUDES)' config_vars.mk | cut -d= -f 2- | tr ' ' '\n' | grep -E '^-(D|I/|pthread)'  | sort | uniq | tr '\n' ' '`" >> tmp_config_vars.mk ; \
+		printf "NOTEST_CPPFLAGS = \n" >> tmp_config_vars.mk ; \
+		printf "EXTRA_CPPFLAGS = \n" >> tmp_config_vars.mk ; \
+		printf "EXTRA_CFLAGS = \n" >> tmp_config_vars.mk ; \
+		mv tmp_config_vars.mk config_vars.mk ) ; \
+	done
+
+install: build install-dev
+	dh_testroot
+	dh_testdir
+	dh_installdirs
+
+	#cleanup of death
+	rm -rf debian/tmp/etc/apache2/original
+	rm -rf debian/tmp/usr/include
+	rm -rf debian/tmp/usr/share/apache2/build
+	rm -f debian/tmp/usr/share/man/man8/httpd.8 # We install our own
+	rm -f debian/tmp/usr/sbin/apxs debian/tmp/usr/sbin/apache2 debian/tmp/usr/sbin/apachectl
+
+	# DO NOT FALL FOR THE TEMPTATION TO MV INTO PACKAGES OR DOOM
+	# WILL FIND YOU.  Use dh_install, this is just because dh_install
+	# can't rename files
+
+	mv debian/tmp/usr/share/man/man8/apxs.8 debian/tmp/usr/share/man/man8/apxs2.8
+	mv debian/tmp/usr/share/man/man8/apachectl.8 debian/tmp/usr/share/man/man8/apache2ctl.8
+	mkdir -p debian/tmp/usr/share/apache2/icons/
+	for i in `ls debian/icons/ | cut -d. -f1,2`; do \
+		uudecode -o debian/tmp/usr/share/apache2/icons/$$i debian/icons/$$i".uue"; \
+	done
+
+	dh_install --list-missing
+
+	cp debian/bash_completion debian/apache2.2-common/etc/bash_completion.d/apache2.2-common
+
+	# standard suexec
+	chmod 4754 debian/apache2-suexec/usr/lib/apache2/suexec 
+	chgrp www-data debian/apache2-suexec/usr/lib/apache2/suexec
+
+	chmod 644 debian/apache2.2-bin/usr/lib/apache2/modules/mod_suexec.so
+
+	# configurable suexec
+	cp debian/build-tree/worker/support/suexec-custom debian/apache2-suexec-custom/usr/lib/apache2/suexec
+	cp debian/suexec-custom.config debian/apache2-suexec-custom/etc/apache2/suexec/www-data
+	chmod 4754 debian/apache2-suexec-custom/usr/lib/apache2/suexec 
+	chgrp www-data debian/apache2-suexec-custom/usr/lib/apache2/suexec
+
+	cp debian/apache2-doc.conf debian/apache2-doc/etc/apache2/conf.d/apache2-doc
+	grep -rl apachectl debian/apache2-doc/usr/share/doc/apache2-doc/manual | xargs perl -p -i -e 's/apachectl(?!\.html)/apache2ctl/g'
+	# remove content negotiation
+	mv debian/apache2-doc/usr/share/doc/apache2-doc/manual \
+		debian/apache2-doc/usr/share/doc/apache2-doc/manual.orig
+	perl debian/convert_docs debian/apache2-doc/usr/share/doc/apache2-doc/manual.orig \
+		debian/apache2-doc/usr/share/doc/apache2-doc/manual
+	mv debian/apache2-doc/usr/share/doc/apache2-doc/manual.orig/images \
+		debian/apache2-doc/usr/share/doc/apache2-doc/manual.orig/style \
+		debian/apache2-doc/usr/share/doc/apache2-doc/manual
+	rmdir debian/apache2-doc/usr/share/doc/apache2-doc/manual/style/lang
+	rmdir debian/apache2-doc/usr/share/doc/apache2-doc/manual/style/xsl/util
+	rmdir debian/apache2-doc/usr/share/doc/apache2-doc/manual/style/xsl
+	rm -r debian/apache2-doc/usr/share/doc/apache2-doc/manual.orig
+
+	cp debian/logrotate debian/apache2.2-common/etc/logrotate.d/apache2
+	cp debian/default-index.html debian/apache2.2-common/usr/share/apache2/default-site/index.html
+
+	for i in worker prefork event itk; do \
+		install -m 755 $(BUILD)/$$i/apache2 debian/apache2.2-bin/usr/lib/apache2/mpm-$$i/apache2 ;\
+	done
+
+	for pkg in `awk '/^Package:/ { print $$2 }' debian/control`; do \
+		find debian/$$pkg/ -name .svn -exec rm -rf {} + ; \
+	done
+
+	dh_installdocs debian/README.backtrace -papache2.2-bin
+	dh_installdocs debian/README.backtrace debian/README.multiple-instances -papache2.2-common
+	dh_installdocs -Napache2.2-common -Napache2.2-bin
+	cp debian/README.Debian debian/apache2-doc/usr/share/doc/apache2-doc/
+	dh_installman
+	dh_bugfiles
+	dh_installinit --no-start -r --name=apache2 -- defaults 91 09
+	dh_installcron --name=apache2
+	dh_installchangelogs CHANGES -Napache2-suexec -Napache2-suexec-custom -Napache2
+	dh_installchangelogs         -papache2-suexec -papache2-suexec-custom -papache2 
+	dh_lintian
+	rm -f debian/apache2.2-bin/usr/share/doc/apache2.2-bin/NEWS.Debian
+	rm -f debian/apache2-utils/usr/share/doc/apache2-utils/NEWS.Debian
+
+	dh_strip --dbg-package=apache2-dbg -Napache2-dbg -Xusr/lib/apache2/mpm
+	if [ "$(LSB_RELEASE)" != "Ubuntu" ] && [ -n "$(DEB_BUILD_STRIP)" ] ; then \
+		for i in worker prefork event itk; do \
+			MPM=usr/lib/apache2/mpm-$$i/apache2 ;\
+			objcopy --only-keep-debug $(BUILD)/$$i/apache2 \
+					debian/apache2-dbg/usr/lib/debug/$$MPM-mpm-$$i ;\
+			chmod 644 debian/apache2-dbg/usr/lib/debug/$$MPM-mpm-$$i ;\
+			strip --remove-section=.comment --remove-section=.note --strip-unneeded \
+					debian/apache2.2-bin/$$MPM ;\
+			objcopy --add-gnu-debuglink=debian/apache2-dbg/usr/lib/debug/$$MPM-mpm-$$i \
+					debian/apache2.2-bin/$$MPM ;\
+		done ;\
+	fi
+
+	cp debian/mpm-itk/README debian/apache2.2-common/usr/share/doc/apache2.2-common/README.mpm-itk
+	cp debian/mpm-itk/CHANGES debian/apache2.2-common/usr/share/doc/apache2.2-common/changelog.mpm-itk
+	cp debian/mpm-itk/debian/changelog debian/apache2.2-common/usr/share/doc/apache2.2-common/changelog.mpm-itk.Debian
+	for p in apache2-prefork-dev apache2-threaded-dev apache2-mpm-prefork apache2-mpm-event \
+	    apache2-mpm-worker apache2-mpm-itk apache2; \
+	do \
+		rm -rf debian/$$p/usr/share/doc/$$p ;\
+		ln -s apache2.2-common debian/$$p/usr/share/doc/$$p ;\
+	done
+	rm -rf debian/apache2-dbg/usr/share/doc/apache2-dbg
+	ln -s apache2.2-bin debian/apache2-dbg/usr/share/doc/apache2-dbg
+	dh_link
+	dh_installexamples
+	dh_compress
+	dh_fixperms -Xsuexec
+	chown -R www-data:www-data debian/apache2.2-common/var/cache/apache2
+	chown root:adm debian/apache2.2-common/var/log/apache2
+	chmod o-rx debian/apache2.2-common/var/log/apache2
+
+	touch $@
+
+binary-indep: install
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i
+
+binary-arch: install
+	dh_makeshlibs -a -V
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
+	if [ "$(LSB_RELEASE)" = "Ubuntu" ]; then \
+		rm -rf debian/apache2-dbg; \
+		sed -i '/apache2-dbg/d' debian/files; \
+		dh_builddeb -a -Napache2-dbg; \
+	else \
+		dh_builddeb -a; \
+	fi
+
+binary: binary-arch binary-indep

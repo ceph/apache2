@@ -1,0 +1,19 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 079_polish_translation.dpatch by Stefan Fritsch <sf@debian.org>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: #570228
+
+@DPATCH@
+diff -urNad '--exclude=CVS' '--exclude=.svn' '--exclude=.git' '--exclude=.arch' '--exclude=.hg' '--exclude=_darcs' '--exclude=.bzr' trunk~/docs/error/HTTP_NOT_FOUND.html.var trunk/docs/error/HTTP_NOT_FOUND.html.var
+--- trunk~/docs/error/HTTP_NOT_FOUND.html.var	2005-11-13 14:22:28.000000000 +0100
++++ trunk/docs/error/HTTP_NOT_FOUND.html.var	2010-02-20 11:37:08.229021346 +0100
+@@ -292,7 +292,7 @@
+     o problemie.
+ 
+   <!--#else -->
+-    Je¶li wpisa³e¶ URLa rêcznie, sprawd¼, czy nie siê nie pomyli³e¶.
++    Je¶li wpisa³e¶ URLa rêcznie, sprawd¼, czy siê nie pomyli³e¶.
+ 
+   <!--#endif -->
+ 

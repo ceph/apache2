@@ -1026,6 +1026,7 @@ request_rec *ap_read_request(conn_rec *conn)
         if (strcasecmp(expect, "100-continue") == 0) {
             r->expecting_100 = 1;
         }
+#if 0
         else {
             r->status = HTTP_EXPECTATION_FAILED;
             ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r,
@@ -1036,6 +1037,7 @@ request_rec *ap_read_request(conn_rec *conn)
             ap_run_log_transaction(r);
             return r;
         }
+#endif
     }
 
     return r;

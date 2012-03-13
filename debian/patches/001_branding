@@ -1,0 +1,36 @@
+#!/bin/sh -e
+## 02_branding.dpatch by Adam Conrad <adconrad@0c3.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Changes apache's PLATFORM based on lsb_release output
+
+BUILD_DIST="($(lsb_release -i -s))"
+
+if [ $# -ne 1 ]; then
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+fi
+
+case "$1" in
+  -patch)
+    if grep -q "${BUILD_DIST}" server/core.c 2>/dev/null; then
+      echo >&2 "`basename $0`: patch already applied"
+      exit 1
+    else
+      # This is where we get our distribution-specific server signature from:
+      sed -i -e "s/(\" PLATFORM \")/${BUILD_DIST}/" server/core.c
+    fi
+  ;;
+  -unpatch) 
+    if grep -q "${BUILD_DIST}" server/core.c 2>/dev/null; then
+      sed -i -e "s/${BUILD_DIST}/(\" PLATFORM \")/" server/core.c
+    else
+      echo >&2 "`basename $0`: patch not yet applied, cannot unpatch"
+      exit 1
+    fi
+  ;;
+  *)
+    echo >&2 "`basename $0`: script expects -patch|-unpatch as argument"
+    exit 1
+  ;;
+esac

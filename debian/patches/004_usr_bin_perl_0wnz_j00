@@ -1,0 +1,15 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## 004_usr_bin_perl_0wnz_j00 by Adam Conrad <adconrad@0c3.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Call /usr/bin/perl in printenv, not /usr/local/bin/perl
+
+@DPATCH@
+--- apache2/docs/cgi-examples/printenv.orig	Fri Sep 21 17:31:24 2001
++++ apache2/docs/cgi-examples/printenv	Fri Sep 21 17:31:29 2001
+@@ -1,4 +1,4 @@
+-#!/usr/local/bin/perl
++#!/usr/bin/perl
+ ##
+ ##  printenv -- demo CGI program which just prints its environment
+ ##

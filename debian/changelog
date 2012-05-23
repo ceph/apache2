@@ -1,3 +1,12 @@
+apache2 (2.2.22-1ubuntu1-inktank1) quantal; urgency=low
+
+  * From <yehuda.sadeh@inktank.com>
+    - don't complain on badly formatted expectations
+    - rgw: don't unset Content-Length header on HEAD response
+      this was being done when content length was 0 
+
+ -- Dan Mick <dan.mick@inktank.com>  Wed, 23 May 2012 11:21:15 -0700
+
 apache2 (2.2.22-1ubuntu1) precise; urgency=low
 
   * Merge from Debian testing.  Remaining changes:
